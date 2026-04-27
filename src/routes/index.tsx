@@ -5,12 +5,15 @@ import YTLayout from "@/components/YTLayout";
 import { VideoCard, CategoryChips, type VideoCardData } from "@/components/VideoCard";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (s: Record<string, unknown>) => ({ q: (s.q as string) || "" }),
+  validateSearch: (s: Record<string, unknown>): { q?: string } => {
+    const q = typeof s.q === "string" && s.q.length > 0 ? s.q : undefined;
+    return q ? { q } : {};
+  },
   component: HomePage,
 });
 
 function HomePage() {
-  const { q } = Route.useSearch();
+  const { q = "" } = Route.useSearch();
   const [videos, setVideos] = useState<VideoCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");

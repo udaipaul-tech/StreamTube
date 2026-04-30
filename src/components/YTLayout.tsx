@@ -11,35 +11,38 @@ import { PLANS } from "@/lib/plans";
 import { useState, type ReactNode } from "react";
 
 const SIDEBAR_PRIMARY = [
-  { label: "Home", icon: Home, to: "/" as const },
-  { label: "Shorts", icon: Flame, to: "/" as const },
+  { label: "Home",          icon: Home,     to: "/" as const },
+  { label: "Shorts",        icon: Flame,    to: "/category/shorts" as const },
   { label: "Subscriptions", icon: ListVideo, to: "/" as const },
 ];
 
 const SIDEBAR_LIBRARY = [
-  { label: "History", icon: History, to: "/profile" as const },
-  { label: "Your videos", icon: VideoIcon, to: "/profile" as const },
-  { label: "Downloads", icon: Download, to: "/profile" as const },
-  { label: "Liked videos", icon: ThumbsUp, to: "/profile" as const },
+  { label: "History",      icon: History,   to: "/profile" as const },
+  { label: "Your videos",  icon: VideoIcon, to: "/profile" as const },
+  { label: "Downloads",    icon: Download,  to: "/profile" as const },
+  { label: "Liked videos", icon: ThumbsUp,  to: "/profile" as const },
 ];
 
 const SIDEBAR_EXPLORE = [
-  { label: "Music", icon: Music2 },
-  { label: "Gaming", icon: Gamepad2 },
-  { label: "News", icon: Newspaper },
-  { label: "Sports", icon: Trophy },
-  { label: "Learning", icon: GraduationCap },
-  { label: "Fashion", icon: Shirt },
+  { label: "Music",    icon: Music2,        to: "/category/music" as const },
+  { label: "Gaming",   icon: Gamepad2,      to: "/category/gaming" as const },
+  { label: "News",     icon: Newspaper,     to: "/category/news" as const },
+  { label: "Sports",   icon: Trophy,        to: "/category/sports" as const },
+  { label: "Learning", icon: GraduationCap, to: "/category/learning" as const },
+  { label: "Fashion",  icon: Shirt,         to: "/category/fashion" as const },
 ];
+
+type ValidRoute = "/" | "/profile" | "/premium" | "/call" | "/auth"
+  | "/category/shorts" | "/category/music" | "/category/gaming"
+  | "/category/news" | "/category/sports" | "/category/learning" | "/category/fashion";
 
 interface Props {
   children: ReactNode;
-  /** Hide the sidebar (e.g. for the watch page where a thinner mini-sidebar is used) */
   miniSidebar?: boolean;
 }
 
 export default function YTLayout({ children, miniSidebar = false }: Props) {
-  const { user, profile, signOut, geo, theme } = useApp();
+  const { user, profile, signOut, geo, theme, toggleTheme } = useApp();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [query, setQuery] = useState("");
@@ -98,6 +101,17 @@ export default function YTLayout({ children, miniSidebar = false }: Props) {
         </form>
 
         <div className="flex items-center gap-1">
+          {/* Theme toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
+
           <Link to="/call" className="hidden sm:block">
             <Button variant="ghost" size="icon" aria-label="Start call">
               <PhoneCall className="h-5 w-5" />
@@ -136,7 +150,7 @@ export default function YTLayout({ children, miniSidebar = false }: Props) {
         {!miniSidebar && (
           <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-60 shrink-0 overflow-y-auto border-r border-border py-3 lg:block">
             <SidebarContent currentPath={path} />
-            <RegionFooter geo={geo} theme={theme} city={profile?.city} region={profile?.region_state} />
+            <RegionFooter geo={geo} theme={theme} toggleTheme={toggleTheme} city={profile?.city} region={profile?.region_state} />
           </aside>
         )}
         {miniSidebar && (
@@ -156,7 +170,7 @@ export default function YTLayout({ children, miniSidebar = false }: Props) {
             <div className="absolute inset-0 bg-black/40" />
             <aside className="absolute left-0 top-0 h-full w-64 overflow-y-auto bg-background py-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <SidebarContent currentPath={path} onNavigate={() => setOpenMobile(false)} />
-              <RegionFooter geo={geo} theme={theme} city={profile?.city} region={profile?.region_state} />
+              <RegionFooter geo={geo} theme={theme} toggleTheme={toggleTheme} city={profile?.city} region={profile?.region_state} />
             </aside>
           </div>
         )}
@@ -181,10 +195,7 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
       <Divider />
       <SectionTitle>Explore</SectionTitle>
       {SIDEBAR_EXPLORE.map((it) => (
-        <button key={it.label} className="flex w-full items-center gap-4 rounded-lg px-3 py-2 text-left hover:bg-muted">
-          <it.icon className="h-5 w-5" />
-          <span>{it.label}</span>
-        </button>
+        <SidebarLink key={it.label} icon={<it.icon className="h-5 w-5" />} label={it.label} to={it.to} active={currentPath === it.to} onClick={onNavigate} />
       ))}
     </nav>
   );
@@ -192,7 +203,7 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
 
 function SidebarLink({
   icon, label, to, active, onClick,
-}: { icon: ReactNode; label: string; to: "/" | "/profile" | "/premium" | "/call" | "/auth"; active?: boolean; onClick?: () => void }) {
+}: { icon: ReactNode; label: string; to: ValidRoute; active?: boolean; onClick?: () => void }) {
   return (
     <Link
       to={to}
@@ -213,7 +224,15 @@ function Divider() {
   return <hr className="my-2 border-border" />;
 }
 
-function RegionFooter({ geo, theme, city, region }: { geo: { city: string; region: string } | null; theme: "light" | "dark"; city?: string; region?: string }) {
+function RegionFooter({
+  geo, theme, toggleTheme, city, region,
+}: {
+  geo: { city: string; region: string } | null;
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+  city?: string;
+  region?: string;
+}) {
   return (
     <div className="mt-4 border-t border-border px-4 pt-3 text-[11px] text-muted-foreground">
       <div className="flex items-center gap-1.5">
@@ -221,10 +240,14 @@ function RegionFooter({ geo, theme, city, region }: { geo: { city: string; regio
         {city || geo?.city || "—"}
         {(region || geo?.region) && `, ${region || geo?.region}`}
       </div>
-      <div className="mt-1 flex items-center gap-1.5">
+      <button
+        onClick={toggleTheme}
+        className="mt-2 flex items-center gap-1.5 rounded-md px-1 py-1 hover:bg-muted transition w-full text-left"
+        aria-label="Toggle theme"
+      >
         {theme === "light" ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
-        Theme: {theme}
-      </div>
+        <span>Theme: <strong>{theme}</strong> (click to toggle)</span>
+      </button>
       <p className="mt-3 text-[10px]">© StreamTube · Built on Lovable</p>
     </div>
   );

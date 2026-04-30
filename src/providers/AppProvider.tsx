@@ -26,11 +26,13 @@ interface AppContextValue {
   loading: boolean;
   geo: { city: string; region: string; country: string } | null;
   theme: "light" | "dark";
+  toggleTheme: () => void;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
+const THEME_KEY = "streamhub_theme_override";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -38,6 +40,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [geo, setGeo] = useState<AppContextValue["geo"]>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  // null = auto (region/time based), "light" | "dark" = user override
+  const [userOverride, setUserOverride] = useState<"light" | "dark" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const stored = localStorage.getItem(THEME_KEY);
+    return stored === "light" || stored === "dark" ? stored : null;
+  });
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
@@ -54,7 +62,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s?.user) {
-        // defer to avoid deadlock
         setTimeout(() => loadProfile(s.user.id), 0);
       } else {
         setProfile(null);
@@ -81,22 +88,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo, profile?.id]);
 
-  // Theme decision (re-evaluates every minute)
+  // Theme decision — user override takes priority, then auto (region + time)
   useEffect(() => {
     const decide = () => {
+      if (userOverride) {
+        setTheme(userOverride);
+        return;
+      }
       const region = profile?.region_state || geo?.region || null;
       setTheme(shouldUseLightTheme(region) ? "light" : "dark");
     };
     decide();
     const t = setInterval(decide, 60_000);
     return () => clearInterval(t);
-  }, [geo, profile?.region_state]);
+  }, [geo, profile?.region_state, userOverride]);
 
   // Apply theme to <html>
   useEffect(() => {
     const html = document.documentElement;
     if (theme === "dark") html.classList.add("dark");
     else html.classList.remove("dark");
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setUserOverride((prev) => {
+      const next = prev === "dark" || (!prev && theme === "dark") ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      return next;
+    });
   }, [theme]);
 
   const refreshProfile = useCallback(async () => {
@@ -117,6 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loading,
         geo,
         theme,
+        toggleTheme,
         refreshProfile,
         signOut,
       }}

@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import YTLayout from "@/components/YTLayout";
-import { VideoCard, CategoryChips, type VideoCardData } from "@/components/VideoCard";
+import { VideoCard, type VideoCardData } from "@/components/VideoCard";
 
 export const Route = createFileRoute("/")({
   validateSearch: (s: Record<string, unknown>): { q?: string } => {
@@ -12,17 +12,29 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+const CATEGORY_CHIPS = [
+  { label: "All",               slug: null },
+  { label: "Music",             slug: "music" },
+  { label: "Gaming",            slug: "gaming" },
+  { label: "News",              slug: "news" },
+  { label: "Shorts",            slug: "shorts" },
+  { label: "Sports",            slug: "sports" },
+  { label: "Learning",          slug: "learning" },
+  { label: "Fashion",           slug: "fashion" },
+  { label: "Recently uploaded", slug: null },
+];
+
 function HomePage() {
   const { q = "" } = Route.useSearch();
+  const navigate = useNavigate();
   const [videos, setVideos] = useState<VideoCardData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState("All");
 
   useEffect(() => {
     setLoading(true);
     supabase
       .from("videos")
-      .select("id,title,description,thumbnail_url,duration_seconds,created_at")
+      .select("id,title,description,video_url,thumbnail_url,duration_seconds,created_at")
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         setVideos((data as VideoCardData[]) || []);
@@ -38,10 +50,29 @@ function HomePage() {
     );
   }, [videos, q]);
 
+  const handleChip = (slug: string | null) => {
+    if (slug) {
+      navigate({ to: "/category/$slug", params: { slug } });
+    }
+  };
+
   return (
     <YTLayout>
       <div className="px-4 py-4 sm:px-6">
-        <CategoryChips active={category} onPick={setCategory} />
+        {/* Category chips */}
+        <div className="sticky top-14 z-30 -mx-4 mb-4 flex gap-3 overflow-x-auto border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border-0">
+          {CATEGORY_CHIPS.map((c) => (
+            <button
+              key={c.label}
+              onClick={() => handleChip(c.slug)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-sm transition ${
+                !c.slug ? "bg-foreground text-background" : "bg-muted hover:bg-muted/70"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
 
         {q && (
           <p className="mb-4 text-sm text-muted-foreground">

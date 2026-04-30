@@ -1,9 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createHmac } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PLANS, type PlanTier } from "@/lib/plans";
+
+// Web Crypto HMAC-SHA256 — works in Cloudflare Workers (no Node crypto needed)
+async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 const CreateSchema = z.object({
   plan: z.enum(["bronze", "silver", "gold"]),
@@ -74,9 +89,10 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!keySecret) return { ok: false as const, error: "Razorpay not configured" };
 
-    const expected = createHmac("sha256", keySecret)
-      .update(`${data.razorpay_order_id}|${data.razorpay_payment_id}`)
-      .digest("hex");
+    const expected = await hmacSha256Hex(
+      keySecret,
+      `${data.razorpay_order_id}|${data.razorpay_payment_id}`
+    );
 
     if (expected !== data.razorpay_signature) {
       return { ok: false as const, error: "Signature mismatch" };
@@ -99,7 +115,7 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// "Simulated payment" fallback — when Razorpay keys aren't configured, the user can still test the upgrade flow.
+// Simulated payment fallback — works when Razorpay keys aren't configured
 const SimSchema = z.object({ plan: z.enum(["bronze", "silver", "gold"]) });
 export const simulateUpgrade = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

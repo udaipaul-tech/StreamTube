@@ -16,6 +16,7 @@ import { Route as CallRouteImport } from './routes/call'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WatchIdRouteImport } from './routes/watch.$id'
+import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
@@ -52,6 +53,11 @@ const WatchIdRoute = WatchIdRouteImport.update({
   path: '/watch/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategorySlugRoute = CategorySlugRouteImport.update({
+  id: '/category/$slug',
+  path: '/category/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/exit': typeof ExitRoute
   '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
+  '/category/$slug': typeof CategorySlugRoute
   '/watch/$id': typeof WatchIdRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/exit': typeof ExitRoute
   '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
+  '/category/$slug': typeof CategorySlugRoute
   '/watch/$id': typeof WatchIdRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/exit': typeof ExitRoute
   '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
+  '/category/$slug': typeof CategorySlugRoute
   '/watch/$id': typeof WatchIdRoute
 }
 export interface FileRouteTypes {
@@ -90,9 +99,18 @@ export interface FileRouteTypes {
     | '/exit'
     | '/premium'
     | '/profile'
+    | '/category/$slug'
     | '/watch/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/call' | '/exit' | '/premium' | '/profile' | '/watch/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/call'
+    | '/exit'
+    | '/premium'
+    | '/profile'
+    | '/category/$slug'
+    | '/watch/$id'
   id:
     | '__root__'
     | '/'
@@ -101,6 +119,7 @@ export interface FileRouteTypes {
     | '/exit'
     | '/premium'
     | '/profile'
+    | '/category/$slug'
     | '/watch/$id'
   fileRoutesById: FileRoutesById
 }
@@ -111,6 +130,7 @@ export interface RootRouteChildren {
   ExitRoute: typeof ExitRoute
   PremiumRoute: typeof PremiumRoute
   ProfileRoute: typeof ProfileRoute
+  CategorySlugRoute: typeof CategorySlugRoute
   WatchIdRoute: typeof WatchIdRoute
 }
 
@@ -165,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WatchIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/category/$slug': {
+      id: '/category/$slug'
+      path: '/category/$slug'
+      fullPath: '/category/$slug'
+      preLoaderRoute: typeof CategorySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -175,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExitRoute: ExitRoute,
   PremiumRoute: PremiumRoute,
   ProfileRoute: ProfileRoute,
+  CategorySlugRoute: CategorySlugRoute,
   WatchIdRoute: WatchIdRoute,
 }
 export const routeTree = rootRouteImport

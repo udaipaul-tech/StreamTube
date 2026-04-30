@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import NavBar from "@/components/NavBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,19 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { requestOtp, verifyOtp } from "@/server/otp.functions";
 import { Mail, Phone, Lock, User as UserIcon, KeyRound } from "lucide-react";
+import { isSouthIndia } from "@/lib/regions";
 
 export const Route = createFileRoute("/auth")({ component: AuthPage });
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { user } = useApp();
+  const { user, geo } = useApp();
+
+  // Auto-detect OTP channel based on region
+  const otpChannel: "email" | "sms" = isSouthIndia(geo?.region) ? "email" : "sms";
+  const otpLabel = otpChannel === "email" ? "Email OTP" : "Phone OTP";
 
   if (user) {
-    // already signed in
     setTimeout(() => navigate({ to: "/" }), 0);
   }
 
@@ -32,12 +36,17 @@ function AuthPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Sign in to comment, save downloads and start video calls.
           </p>
+          {geo?.region && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              📍 Detected: {geo.region} → OTP via <strong>{otpChannel === "email" ? "Email" : "SMS"}</strong>
+            </p>
+          )}
 
           <Tabs defaultValue="signin" className="mt-6">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="signin">Sign in</TabsTrigger>
               <TabsTrigger value="signup">Sign up</TabsTrigger>
-              <TabsTrigger value="otp">Phone OTP</TabsTrigger>
+              <TabsTrigger value="otp">{otpLabel}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin" className="mt-4">
@@ -47,7 +56,7 @@ function AuthPage() {
               <SignUpForm onDone={() => navigate({ to: "/" })} />
             </TabsContent>
             <TabsContent value="otp" className="mt-4">
-              <OtpForm onDone={() => navigate({ to: "/" })} />
+              <OtpForm onDone={() => navigate({ to: "/" })} channel={otpChannel} />
             </TabsContent>
           </Tabs>
         </div>
@@ -132,8 +141,8 @@ function SignUpForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function OtpForm({ onDone }: { onDone: () => void }) {
-  const [phone, setPhone] = useState("");
+function OtpForm({ onDone, channel }: { onDone: () => void; channel: "email" | "sms" }) {
+  const [identifier, setIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
   const [devCode, setDevCode] = useState<string | null>(null);
@@ -142,14 +151,18 @@ function OtpForm({ onDone }: { onDone: () => void }) {
   const requestOtpFn = useServerFn(requestOtp);
   const verifyOtpFn = useServerFn(verifyOtp);
 
+  const placeholder = channel === "email" ? "you@example.com" : "+91 98xxxxxxxx";
+  const inputType = channel === "email" ? "email" : "tel";
+  const fieldLabel = channel === "email" ? "Email address" : "Phone (with country code)";
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await requestOtpFn({ data: { identifier: phone, channel: "sms" } });
+      const res = await requestOtpFn({ data: { identifier, channel } });
       setDevCode(res.devCode ?? null);
       setStep("verify");
-      toast.success(res.delivered ? "OTP sent via SMS" : `OTP generated (${res.deliveryNote})`);
+      toast.success(res.delivered ? `OTP sent via ${channel}` : `OTP generated (${res.deliveryNote})`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send OTP");
     } finally {
@@ -161,41 +174,31 @@ function OtpForm({ onDone }: { onDone: () => void }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await verifyOtpFn({ data: { identifier: phone, code } });
+      const res = await verifyOtpFn({ data: { identifier, code } });
       if (!res.ok) {
         toast.error(res.error || "Invalid code");
         return;
       }
-      // OTP verified — sign in / sign up via a synthesized email so a Supabase user exists
-      const syntheticEmail = `phone_${phone.replace(/[^0-9]/g, "")}@otp.local`;
-      const syntheticPassword = `otp-${phone.replace(/[^0-9]/g, "")}-streamhub`;
+      const syntheticEmail =
+        channel === "email"
+          ? identifier
+          : `phone_${identifier.replace(/[^0-9]/g, "")}@otp.local`;
+      const syntheticPassword =
+        channel === "email"
+          ? `email-otp-${identifier}-streamhub`
+          : `otp-${identifier.replace(/[^0-9]/g, "")}-streamhub`;
 
-      // Try sign in first; if it fails, sign up.
-      const signIn = await supabase.auth.signInWithPassword({
-        email: syntheticEmail,
-        password: syntheticPassword,
-      });
+      const signIn = await supabase.auth.signInWithPassword({ email: syntheticEmail, password: syntheticPassword });
       if (signIn.error) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: syntheticEmail,
           password: syntheticPassword,
-          options: { data: { display_name: phone, phone } },
+          options: { data: { display_name: identifier } },
         });
-        if (signUpError) {
-          toast.error(signUpError.message);
-          return;
-        }
-        // Try sign in once more (in case email confirmation isn't required)
-        const second = await supabase.auth.signInWithPassword({
-          email: syntheticEmail,
-          password: syntheticPassword,
-        });
-        if (second.error) {
-          toast.message("Account created — please confirm your email or use email sign-in next time.");
-          return;
-        }
+        if (signUpError) { toast.error(signUpError.message); return; }
+        const second = await supabase.auth.signInWithPassword({ email: syntheticEmail, password: syntheticPassword });
+        if (second.error) { toast.message("Account created — confirm your email or use email sign-in."); return; }
       }
-
       toast.success("Signed in!");
       onDone();
     } catch (err) {
@@ -208,11 +211,11 @@ function OtpForm({ onDone }: { onDone: () => void }) {
   if (step === "request") {
     return (
       <form onSubmit={send} className="space-y-3">
-        <Field icon={<Phone className="h-4 w-4" />} label="Phone (with country code)">
-          <Input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98xxxxxxxx" />
+        <Field icon={channel === "email" ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />} label={fieldLabel}>
+          <Input type={inputType} required value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder={placeholder} />
         </Field>
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Sending…" : "Send OTP"}
+          {loading ? "Sending…" : `Send OTP via ${channel === "email" ? "Email" : "SMS"}`}
         </Button>
       </form>
     );
@@ -221,15 +224,7 @@ function OtpForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={verify} className="space-y-3">
       <Field icon={<KeyRound className="h-4 w-4" />} label="Enter 6-digit code">
-        <Input
-          required
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="123456"
-        />
+        <Input required inputMode="numeric" pattern="[0-9]*" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" />
       </Field>
       {devCode && (
         <div className="rounded-md border border-dashed border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
@@ -237,12 +232,8 @@ function OtpForm({ onDone }: { onDone: () => void }) {
         </div>
       )}
       <div className="flex gap-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("request")}>
-          Back
-        </Button>
-        <Button type="submit" disabled={loading} className="flex-1">
-          {loading ? "Verifying…" : "Verify & sign in"}
-        </Button>
+        <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("request")}>Back</Button>
+        <Button type="submit" disabled={loading} className="flex-1">{loading ? "Verifying…" : "Verify & sign in"}</Button>
       </div>
     </form>
   );

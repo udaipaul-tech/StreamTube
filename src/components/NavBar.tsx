@@ -5,7 +5,7 @@ import { Crown, Download, LogIn, LogOut, MapPin, PhoneCall, Sun, Moon, Video } f
 import { PLANS } from "@/lib/plans";
 
 export default function NavBar() {
-  const { user, profile, signOut, geo, theme } = useApp();
+  const { user, profile, signOut, geo, theme, toggleTheme } = useApp();
   const navigate = useNavigate();
 
   const planLabel = profile ? PLANS[profile.plan].label : "Guest";
@@ -26,13 +26,20 @@ export default function NavBar() {
             {profile?.city || geo?.city || "—"}
             {(profile?.region_state || geo?.region) && `, ${profile?.region_state || geo?.region}`}
           </span>
-          <span className="inline-flex items-center gap-1">
-            {theme === "light" ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
-            {theme}
-          </span>
         </div>
 
         <nav className="flex items-center gap-1.5">
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent"
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <span className="hidden sm:inline">{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
+
           <Link to="/call"><Button variant="ghost" size="sm"><PhoneCall className="mr-1 h-4 w-4" />Call</Button></Link>
           <Link to="/profile"><Button variant="ghost" size="sm"><Download className="mr-1 h-4 w-4" />Downloads</Button></Link>
           <Link to="/premium">

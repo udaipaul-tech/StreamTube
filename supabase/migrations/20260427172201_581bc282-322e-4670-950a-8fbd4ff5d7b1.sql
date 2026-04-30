@@ -222,8 +222,8 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 -- SEED VIDEOS
 -- =========================================================================
 INSERT INTO public.videos (title, description, video_url, thumbnail_url, duration_seconds) VALUES
-('Big Buck Bunny', 'A short open-source animated film.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg', 596),
-('Elephants Dream', 'A surreal short by the Blender Foundation.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg', 653),
-('For Bigger Blazes', 'A Chromecast demo clip.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg', 15),
-('Sintel', 'A short fantasy film by the Blender Foundation.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg', 888),
-('Tears of Steel', 'A live-action sci-fi short.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg', 734);
+('Big Buck Bunny', 'A short open-source animated film.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'https://peach.blender.org/wp-content/uploads/bbb-splash.png', 596),
+('Elephants Dream', 'A surreal short by the Blender Foundation.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', 'https://orange.blender.org/wp-content/uploads/elephants-dream-poster.jpg', 653),
+('For Bigger Blazes', 'A Chromecast demo clip.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', NULL, 15),
+('Sintel', 'A short fantasy film by the Blender Foundation.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', 'https://durian.blender.org/wp-content/uploads/2010/09/sintel-poster.jpg', 888),
+('Tears of Steel', 'A live-action sci-fi short.', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', NULL, 734);

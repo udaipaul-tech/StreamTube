@@ -6,13 +6,43 @@ import CommentSection from "@/components/CommentSection";
 import { VideoCard, type VideoCardData } from "@/components/VideoCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/providers/AppProvider";
-import { watchLimit } from "@/lib/plans";
+import { watchLimit, PLANS } from "@/lib/plans";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ThumbsUp, ThumbsDown, Share2, Download, Bell } from "lucide-react";
 import { channelFor, formatViews, timeAgo } from "@/lib/format";
 
 export const Route = createFileRoute("/watch/$id")({ component: WatchPage });
+
+// Working video URLs — fallback when DB has broken Google CDN URLs
+const WORKING_VIDEO_URLS: Record<string, string> = {
+  "Big Buck Bunny": "https://www.w3schools.com/html/mov_bbb.mp4",
+  "Elephants Dream": "https://www.w3schools.com/html/movie.mp4",
+  "Sintel": "https://filesamples.com/samples/video/mp4/sample_640x360.mp4",
+  "Tears of Steel": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "For Bigger Blazes": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "Nature Walk": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "City Timelapse": "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+  "Ocean Waves": "https://samplelib.com/lib/preview/mp4/sample-15s.mp4",
+  "Mountain Sunrise": "https://samplelib.com/lib/preview/mp4/sample-20s.mp4",
+  "Coding Tutorial": "https://filesamples.com/samples/video/mp4/sample_640x360.mp4",
+  "Street Food Tour": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "Space Documentary": "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+  "Yoga Morning Routine": "https://samplelib.com/lib/preview/mp4/sample-15s.mp4",
+  "Guitar Lesson": "https://samplelib.com/lib/preview/mp4/sample-20s.mp4",
+  "Wildlife Safari": "https://filesamples.com/samples/video/mp4/sample_640x360.mp4",
+  "Cooking Masterclass": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "Travel Vlog Tokyo": "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+  "Drone Footage Iceland": "https://samplelib.com/lib/preview/mp4/sample-15s.mp4",
+};
+
+function getVideoUrl(video: VideoRow): string {
+  // If DB URL is the broken Google CDN, use working fallback
+  if (video.video_url?.includes("commondatastorage.googleapis.com")) {
+    return WORKING_VIDEO_URLS[video.title] ?? video.video_url;
+  }
+  return video.video_url;
+}
 
 interface VideoRow extends VideoCardData {
   video_url: string;
@@ -21,10 +51,11 @@ interface VideoRow extends VideoCardData {
 function WatchPage() {
   const { id } = useParams({ from: "/watch/$id" });
   const navigate = useNavigate();
-  const { profile, refreshProfile } = useApp();
+  const { profile, user, refreshProfile } = useApp();
   const [video, setVideo] = useState<VideoRow | null>(null);
   const [related, setRelated] = useState<VideoCardData[]>([]);
   const [showDesc, setShowDesc] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     supabase
@@ -35,13 +66,13 @@ function WatchPage() {
       .then(({ data }) => setVideo(data as VideoRow | null));
     supabase
       .from("videos")
-      .select("id,title,description,thumbnail_url,duration_seconds,created_at")
+      .select("id,title,description,video_url,thumbnail_url,duration_seconds,created_at")
       .neq("id", id)
       .limit(20)
       .then(({ data }) => setRelated((data as VideoCardData[]) || []));
   }, [id]);
 
-  const limit = profile ? watchLimit(profile.plan) : 5 * 60;
+  const limit = profile ? watchLimit(profile.plan) : -1;
   const consumedToday = profile?.watch_seconds_today ?? 0;
   const remaining = limit < 0 ? Number.MAX_SAFE_INTEGER : Math.max(0, limit - consumedToday);
 
@@ -53,6 +84,52 @@ function WatchPage() {
         .update({ watch_seconds_today: consumedToday + sessionSeconds })
         .eq("id", profile.id);
       refreshProfile();
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!user || !profile) {
+      toast.error("Sign in to download videos.");
+      navigate({ to: "/auth" });
+      return;
+    }
+    if (!video?.video_url) return;
+
+    // Check daily limit
+    const planInfo = PLANS[profile.plan];
+    const downloadLimit = planInfo.tier === "free" ? 1 : -1;
+    if (downloadLimit > 0 && profile.downloads_today >= downloadLimit) {
+      toast.error("Daily download limit reached. Upgrade to Premium for unlimited downloads.", {
+        action: { label: "Upgrade", onClick: () => navigate({ to: "/premium" }) },
+      });
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      // Record download in DB
+      await supabase.from("downloads").insert({ user_id: user.id, video_id: video.id });
+      await supabase
+        .from("profiles")
+        .update({ downloads_today: profile.downloads_today + 1 })
+        .eq("id", profile.id);
+      await refreshProfile();
+
+      // Trigger browser download
+      const a = document.createElement("a");
+      a.href = getVideoUrl(video);
+      a.download = `${video.title}.mp4`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast.success("Download started! Check your Downloads section in your profile.");
+    } catch (err) {
+      toast.error("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -69,6 +146,14 @@ function WatchPage() {
     );
   }
 
+  if (!video.video_url) {
+    return (
+      <YTLayout miniSidebar>
+        <p className="p-8 text-center text-muted-foreground">Video not available.</p>
+      </YTLayout>
+    );
+  }
+
   const ch = channelFor(video.id);
 
   return (
@@ -77,7 +162,7 @@ function WatchPage() {
         {/* Main column */}
         <div className="min-w-0">
           <GestureVideoPlayer
-            src={video.video_url}
+            src={getVideoUrl(video)}
             poster={video.thumbnail_url || undefined}
             watchLimitSeconds={limit}
             remainingSeconds={remaining}
@@ -124,9 +209,10 @@ function WatchPage() {
                 variant="secondary"
                 size="sm"
                 className="rounded-full"
-                onClick={() => navigate({ to: "/profile" })}
+                onClick={handleDownload}
+                disabled={downloading}
               >
-                <Download className="mr-1 h-4 w-4" />Download
+                <Download className="mr-1 h-4 w-4" />{downloading ? "Downloading…" : "Download"}
               </Button>
             </div>
           </div>
